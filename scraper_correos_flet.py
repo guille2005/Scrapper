@@ -1574,7 +1574,7 @@ def main(page: ft.Page) -> None:
 
     login_name = ft.TextField(
         label="Nombre de acceso",
-        hint_text="Ejemplo: Joel",
+        hint_text="Introduce tu nombre",
         width=360,
         border_radius=8,
         border_color="#D1D5DB",

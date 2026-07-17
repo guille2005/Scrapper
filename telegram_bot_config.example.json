@@ -1,0 +1,6 @@
+{
+  "telegram_bot_token": "PEGA_AQUI_EL_TOKEN_DEL_BOT",
+  "supabase_url": "https://ziyrtaxmvxfzsondcxph.supabase.co",
+  "supabase_anon_key": "PEGA_AQUI_LA_ANON_PUBLIC_KEY",
+  "bot_admin_secret": "PEGA_AQUI_LA_CLAVE_INTERNA_DEL_BOT"
+}

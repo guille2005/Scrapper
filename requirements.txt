@@ -1,0 +1,10 @@
+flet
+flet-cli
+flet-desktop
+requests
+beautifulsoup4
+dnspython
+googlesearch-python
+ddgs
+openpyxl
+pyinstaller

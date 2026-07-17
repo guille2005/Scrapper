@@ -1,0 +1,13 @@
+__pycache__/
+build/
+build_debug/
+dist/
+dist_debug/
+*.pyc
+*.pyo
+*.spec
+*.exe
+.env
+scraper_config.json
+telegram_bot_config.json
+Resultados_*.xlsx

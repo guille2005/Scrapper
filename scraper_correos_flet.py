@@ -53,7 +53,7 @@ SEARCH_CACHE: dict[str, list[str]] = {}
 APP_VERSION = "0.3.0"
 SUPABASE_URL = "https://ziyrtaxmvxfzsondcxph.supabase.co"
 SUPABASE_ANON_KEY = "sb_publishable_bwOFLcHH8HTg-Tvwo5ThAw_3NxIHvCU"
-GITHUB_REPO = ""
+GITHUB_REPO = "guille2005/Scrapper"
 GITHUB_RELEASE_ASSET = "ScraperCorreos.exe"
 CONTACT_KEYWORDS = (
     "contacto",

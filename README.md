@@ -24,7 +24,7 @@ Ejemplo:
 {
   "supabase_url": "https://ziyrtaxmvxfzsondcxph.supabase.co",
   "supabase_anon_key": "ANON_PUBLIC_KEY",
-  "github_repo": "usuario/repositorio",
+  "github_repo": "guille2005/Scrapper",
   "github_release_asset": "ScraperCorreos.exe"
 }
 ```
@@ -67,7 +67,7 @@ Para publicar una release:
 
 ```powershell
 $env:GITHUB_TOKEN="TOKEN_DE_GITHUB"
-$env:SCRAPER_GITHUB_REPO="usuario/repositorio"
+$env:SCRAPER_GITHUB_REPO="guille2005/Scrapper"
 .\publish_github_release.ps1 -Version "v0.3.1"
 ```
 

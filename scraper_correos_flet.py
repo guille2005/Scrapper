@@ -17,7 +17,7 @@ from urllib.parse import parse_qs, unquote, urlencode, urljoin, urlparse
 import flet as ft
 import requests
 from bs4 import BeautifulSoup
-from openpyxl import Workbook
+from openpyxl import Workbook, load_workbook
 from requests.packages.urllib3.exceptions import InsecureRequestWarning
 
 try:
@@ -50,7 +50,7 @@ HEADERS = {
     )
 }
 SEARCH_CACHE: dict[str, list[str]] = {}
-APP_VERSION = "0.3.0"
+APP_VERSION = "0.3.1"
 SUPABASE_URL = "https://ziyrtaxmvxfzsondcxph.supabase.co"
 SUPABASE_ANON_KEY = "sb_publishable_bwOFLcHH8HTg-Tvwo5ThAw_3NxIHvCU"
 GITHUB_REPO = "guille2005/Scrapper"
@@ -358,13 +358,47 @@ def read_companies_from_csv(csv_path: str, require_web: bool = False) -> list[di
     raise ValueError("No se pudo leer el CSV con UTF-8, CP1252 ni Latin-1.") from last_error
 
 
-def save_results_to_excel(
+def read_companies_from_excel(excel_path: str, require_web: bool = False) -> list[dict[str, str]]:
+    workbook = load_workbook(excel_path, read_only=True, data_only=True)
+    worksheet = workbook.active
+    rows_iter = worksheet.iter_rows(values_only=True)
+    headers = [str(value or "").strip() for value in next(rows_iter, [])]
+    if not headers:
+        raise ValueError("El Excel no contiene cabeceras.")
+
+    company_col = find_column(headers, "Empresa", required=True)
+    web_col = find_column(headers, "Web", required=require_web)
+    company_index = headers.index(company_col) if company_col else -1
+    web_index = headers.index(web_col) if web_col else -1
+
+    rows: list[dict[str, str]] = []
+    for values in rows_iter:
+        company = str(values[company_index] or "").strip() if company_index >= 0 and company_index < len(values) else ""
+        web = str(values[web_index] or "").strip() if web_index >= 0 and web_index < len(values) else ""
+        if company or web:
+            rows.append({"Empresa": company, "Web": web})
+    return rows
+
+
+def read_companies_from_file(input_path: str, require_web: bool = False) -> list[dict[str, str]]:
+    suffix = Path(input_path).suffix.lower()
+    if suffix == ".csv":
+        return read_companies_from_csv(input_path, require_web)
+    if suffix in {".xlsx", ".xlsm"}:
+        return read_companies_from_excel(input_path, require_web)
+    raise ValueError("Formato no soportado. Selecciona un archivo CSV o Excel (.xlsx).")
+
+
+def save_results(
     results: list[dict[str, str]],
-    csv_path: str,
-    file_name: str,
+    input_path: str,
+    base_name: str,
     columns: list[str],
 ) -> str:
-    output_path = Path(csv_path).resolve().parent / file_name
+    output_dir = Path(input_path).resolve().parent
+    xlsx_path = output_dir / f"{base_name}.xlsx"
+    csv_path = output_dir / f"{base_name}.csv"
+
     workbook = Workbook()
     worksheet = workbook.active
     worksheet.title = "Resultados"
@@ -376,8 +410,15 @@ def save_results_to_excel(
     for index, column in enumerate(columns, start=1):
         worksheet.column_dimensions[chr(64 + index)].width = max(22, len(column) + 6)
 
-    workbook.save(output_path)
-    return str(output_path)
+    workbook.save(xlsx_path)
+
+    with csv_path.open("w", encoding="utf-8-sig", newline="") as csv_file:
+        writer = csv.DictWriter(csv_file, fieldnames=columns, extrasaction="ignore")
+        writer.writeheader()
+        for row in results:
+            writer.writerow({column: row.get(column, "") for column in columns})
+
+    return f"{xlsx_path} | {csv_path}"
 
 
 def ensure_url_has_scheme(raw_url: str) -> str:
@@ -1138,7 +1179,7 @@ def run_complete_for_company(company: str, niche_keywords: str) -> dict[str, str
 
 class TabState:
     def __init__(self) -> None:
-        self.csv_path = ""
+        self.input_path = ""
         self.running = False
         self.file_text: ft.Text | None = None
         self.progress: ft.ProgressBar | None = None
@@ -1172,7 +1213,7 @@ def main(page: ft.Page) -> None:
             return
         has_niche = bool((state.niche_field.value if state.niche_field else "").strip())
         state.select_button.disabled = state.running
-        state.start_button.disabled = state.running or not state.csv_path or (needs_niche and not has_niche)
+        state.start_button.disabled = state.running or not state.input_path or (needs_niche and not has_niche)
         state.start_button.bgcolor = "#9CA3AF" if state.start_button.disabled else "#2563EB"
 
     async def set_progress(state: TabState, value: float, text: str) -> None:
@@ -1263,7 +1304,7 @@ def main(page: ft.Page) -> None:
             border_radius=8,
         )
         state.status = ft.Text(
-            "0% - Esperando archivo CSV",
+            "0% - Esperando archivo",
             size=13,
             color="#374151",
             text_align=ft.TextAlign.CENTER,
@@ -1292,11 +1333,11 @@ def main(page: ft.Page) -> None:
             files = await file_picker.pick_files(
                 allow_multiple=False,
                 file_type=ft.FilePickerFileType.CUSTOM,
-                allowed_extensions=["csv"],
+                allowed_extensions=["csv", "xlsx", "xlsm"],
             )
             if files:
-                state.csv_path = files[0].path or ""
-                state.file_text.value = state.csv_path
+                state.input_path = files[0].path or ""
+                state.file_text.value = state.input_path
                 state.status.value = "0% - Archivo listo para procesar"
                 state.result.value = ""
                 state.progress.value = 0
@@ -1323,7 +1364,7 @@ def main(page: ft.Page) -> None:
                 page.update()
 
         def start_job(_: ft.ControlEvent) -> None:
-            if state.running or not state.csv_path:
+            if state.running or not state.input_path:
                 return
             if needs_niche and not (state.niche_field.value if state.niche_field else "").strip():
                 show_message("Introduce las etiquetas del nicho antes de empezar.", error=True)
@@ -1332,7 +1373,7 @@ def main(page: ft.Page) -> None:
 
         outline_style, primary_style = make_button_styles()
         state.select_button = ft.OutlinedButton(
-            content="Seleccionar CSV",
+            content="Seleccionar archivo",
             icon=ft.Icons.UPLOAD_FILE_ROUNDED,
             on_click=choose_file,
             style=outline_style,
@@ -1386,9 +1427,9 @@ def main(page: ft.Page) -> None:
 
     async def run_website_search(state: TabState) -> None:
         niche = state.niche_field.value if state.niche_field else ""
-        rows = await asyncio.to_thread(read_companies_from_csv, state.csv_path, False)
+        rows = await asyncio.to_thread(read_companies_from_file, state.input_path, False)
         if not rows:
-            raise ValueError("El CSV no contiene filas para procesar.")
+            raise ValueError("El archivo no contiene filas para procesar.")
 
         results: list[dict[str, str]] = []
         total = len(rows)
@@ -1406,10 +1447,10 @@ def main(page: ft.Page) -> None:
             await set_progress(state, index / total, f"{int(index / total * 100)}% - Completado: {company}")
 
         output = await asyncio.to_thread(
-            save_results_to_excel,
+            save_results,
             results,
-            state.csv_path,
-            "Resultados_Webs.xlsx",
+            state.input_path,
+            "Resultados_Webs",
             ["Empresa", "Con nicho", "Sin nicho"],
         )
         state.result.value = f"Archivo generado: {output}"
@@ -1418,9 +1459,9 @@ def main(page: ft.Page) -> None:
         show_message("Busqueda de webs finalizada.")
 
     async def run_email_search(state: TabState) -> None:
-        rows = await asyncio.to_thread(read_companies_from_csv, state.csv_path, True)
+        rows = await asyncio.to_thread(read_companies_from_file, state.input_path, True)
         if not rows:
-            raise ValueError("El CSV no contiene filas para procesar.")
+            raise ValueError("El archivo no contiene filas para procesar.")
 
         results: list[dict[str, str]] = []
         total = len(rows)
@@ -1439,10 +1480,10 @@ def main(page: ft.Page) -> None:
             await set_progress(state, index / total, f"{int(index / total * 100)}% - Completado: {company}")
 
         output = await asyncio.to_thread(
-            save_results_to_excel,
+            save_results,
             results,
-            state.csv_path,
-            "Resultados_Correos.xlsx",
+            state.input_path,
+            "Resultados_Correos",
             ["Empresa", "Web", "Correo Encontrado", "Estado de Verificación"],
         )
         state.result.value = f"Archivo generado: {output}"
@@ -1452,9 +1493,9 @@ def main(page: ft.Page) -> None:
 
     async def run_complete(state: TabState) -> None:
         niche = state.niche_field.value if state.niche_field else ""
-        rows = await asyncio.to_thread(read_companies_from_csv, state.csv_path, False)
+        rows = await asyncio.to_thread(read_companies_from_file, state.input_path, False)
         if not rows:
-            raise ValueError("El CSV no contiene filas para procesar.")
+            raise ValueError("El archivo no contiene filas para procesar.")
 
         results: list[dict[str, str]] = []
         total = len(rows)
@@ -1473,10 +1514,10 @@ def main(page: ft.Page) -> None:
             await set_progress(state, index / total, f"{int(index / total * 100)}% - Completado: {company}")
 
         output = await asyncio.to_thread(
-            save_results_to_excel,
+            save_results,
             results,
-            state.csv_path,
-            "Resultados_Completo.xlsx",
+            state.input_path,
+            "Resultados_Completo",
             ["Empresa", "Web Encontrada", "Correo Encontrado", "Estado de Verificación"],
         )
         state.result.value = f"Archivo generado: {output}"
@@ -1513,7 +1554,7 @@ def main(page: ft.Page) -> None:
                         ),
                         build_job_tab(
                             "Buscar Correos en Webs",
-                            "Carga un CSV con Empresa y Web. La app rastrea correos y verifica el servidor de correo.",
+                            "Carga un archivo con Empresa y Web. La app rastrea correos y verifica el servidor de correo.",
                             "Buscar Correos",
                             False,
                             run_email_search,

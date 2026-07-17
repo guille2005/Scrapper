@@ -108,6 +108,38 @@ def disable_login(name: str) -> bool:
     return True
 
 
+def list_logins() -> list[dict]:
+    if CONFIG.get("bot_admin_secret"):
+        url = f"{CONFIG['supabase_url'].rstrip('/')}/rest/v1/rpc/list_scraper_access"
+        payload = {"admin_secret": CONFIG["bot_admin_secret"]}
+        response = requests.post(url, headers=supabase_headers(), json=payload, timeout=15)
+        response.raise_for_status()
+        return response.json()
+
+    url = (
+        f"{CONFIG['supabase_url'].rstrip('/')}/rest/v1/app_allowed_logins"
+        "?select=login_name,telegram_username,created_at,updated_at"
+        "&is_active=eq.true"
+        "&order=login_name.asc"
+    )
+    response = requests.get(url, headers=supabase_headers(), timeout=15)
+    response.raise_for_status()
+    return response.json()
+
+
+def format_logins(logins: list[dict]) -> str:
+    if not logins:
+        return "No hay licencias activas."
+
+    lines = [f"Licencias activas: {len(logins)}"]
+    for index, login in enumerate(logins, start=1):
+        name = login.get("login_name") or "Sin nombre"
+        username = login.get("telegram_username") or ""
+        suffix = f" (@{username})" if username and username != "setup" else ""
+        lines.append(f"{index}. {name}{suffix}")
+    return "\n".join(lines)
+
+
 def send_message(chat_id: int, text: str) -> None:
     token = CONFIG["telegram_bot_token"]
     requests.post(
@@ -128,7 +160,24 @@ def handle_message(message: dict) -> None:
         return
 
     if text.lower() in {"/start", "/help"}:
-        send_message(chat_id, "Escríbeme un nombre para dar acceso. Ejemplo: Joel\nPara quitarlo: /borrar Joel")
+        send_message(
+            chat_id,
+            "\n".join(
+                [
+                    "Comandos:",
+                    "/licencias - ver accesos activos",
+                    "/borrar Nombre - desactivar un acceso",
+                    "Nombre - crear o activar un acceso",
+                ]
+            ),
+        )
+        return
+
+    if text.lower() in {"/licencias", "/lista", "/listar"}:
+        try:
+            send_message(chat_id, format_logins(list_logins()))
+        except Exception as exc:
+            send_message(chat_id, f"No pude leer las licencias: {exc}")
         return
 
     if text.lower().startswith("/borrar "):

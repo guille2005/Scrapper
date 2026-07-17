@@ -52,6 +52,16 @@ Uso:
 
 - Escribir `Joel` al bot crea o activa el acceso `Joel`.
 - Escribir `/borrar Joel` desactiva ese acceso.
+- Escribir `/licencias` muestra las licencias activas.
+
+## Archivos de entrada y salida
+
+La app acepta archivos `.csv` y `.xlsx`.
+
+Cada proceso genera dos salidas en la misma carpeta del archivo original:
+
+- `.xlsx`
+- `.csv`
 
 ## Actualizaciones por GitHub Releases
 

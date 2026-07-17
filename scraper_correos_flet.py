@@ -1616,7 +1616,7 @@ def main(page: ft.Page) -> None:
     page.add(
         ft.Container(
             expand=True,
-            alignment=ft.alignment.center,
+            alignment=ft.Alignment(0, 0),
             content=ft.Container(
                 width=440,
                 padding=ft.Padding(34, 32, 34, 32),
